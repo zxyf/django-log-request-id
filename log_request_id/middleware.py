@@ -19,6 +19,9 @@ class RequestIDMiddleware(MiddlewareMixin):
         request_id = self._get_request_id(request)
         local.request_id = request_id
         request.id = request_id
+        post_data = getattr(request, 'body', '')
+        if post_data:
+            logger.info("request_id:{} post_data= {}".format(request_id, post_data))
 
     def process_response(self, request, response):
         if getattr(settings, REQUEST_ID_RESPONSE_HEADER_SETTING, False) and getattr(request, 'id', None):
@@ -33,16 +36,24 @@ class RequestIDMiddleware(MiddlewareMixin):
 
         user = getattr(request, 'user', None)
         user_id = getattr(user, 'pk', None) or getattr(user, 'id', None)
+        user_name = getattr(user, 'username', None)
 
-        message = 'method=%s path=%s status=%s'
-        args = (request.method, request.path, response.status_code)
+        message = ' method=%s path=%s status=%s response=%s'
+        args = (request.method, request.path, response.status_code, getattr(response, 'data', None))
 
+        if user_name:
+            message = ' user=%s' + message
+            args = (user_name,) + args
         if user_id:
-            message += ' user=%s'
-            args += (user_id,)
+            message = ' user_id=%s' + message
+            args = (user_id,) + args
+
+        if hasattr(request, 'id'):
+            message = 'request_id=%s' + message
+            args = (request.id,) + args
 
         logger.info(message, *args)
-        
+
         try:
             del local.request_id
         except AttributeError:
